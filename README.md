@@ -13,4 +13,10 @@ Some packages used in python:
 Packages used in R:
 * R-INLA
 
-![./spatial-fit.pdf](./spatial_fit.pdf)
+## Notebooks and examples
+____
+
+* Example of geospatial fit: [here](./spatial_fit.pdf).
+* [Notebook](./data_exploration.ipynb) on data exploration.
+* [Notebook](./xgb_play.ipynb) on xgboost.
+* [Notebook](./keras_play.ipynb) on keras neural network.
