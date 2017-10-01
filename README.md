@@ -7,10 +7,10 @@ Exploration of [kaggle](https://kaggle.com) competition on predicting the presen
 
 Some packages used in python:
 * Pandas
-* keras 
+* keras
 * xgboost
 
 Packages used in R:
 * R-INLA
 
-![./spatial-fit.pdf](./spatial-fit.pdf)
+![./spatial-fit.pdf](./spatial_fit.pdf)
