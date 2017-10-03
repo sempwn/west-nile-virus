@@ -3,6 +3,29 @@ import numpy as np
 from sklearn import ensemble, preprocessing
 
 '''
+Random useful functions
+'''
+
+def scoreAUC(y,probs):
+    ps = np.linspace(0.,1.,num=100)
+    prs = []
+    nrs = []
+    for p in ps:
+        preds = probs[:,0]<p
+        pr = np.sum((y & preds))/float(np.sum(y))
+        nr = np.sum((1-y & 1-preds))/float(np.sum(1-y))
+        nrs.append(nr)
+        prs.append(pr)
+    xs = 1-np.array(nrs)
+    ys = np.array(prs)
+    dxs = xs[1:] - xs[:-1]
+    ays = .5*(ys[1:] + ys[:-1])
+    auc = np.sum(ays*dxs)
+    return {'score':auc,'fpr':xs,'tpr':ys}
+
+
+
+'''
 Pre-process data
 '''
 
@@ -14,7 +37,7 @@ def addDateCol(df):
     dt_count = df.groupby('Date').count()[['Address']] #get mutiple counts on a certain date
     dt_count.columns = ['DateCount'] #create new column for how many times date repeated.
     test = pd.merge(df, dt_count, how='inner', left_on='Date', right_index=True)
-    return test
+    return test['DateCount']
 
 def loadPreData():
     """
@@ -33,8 +56,8 @@ def loadPreData():
 
 
     #add leaky feature
-    train = addDateCol(train)
-    test = addDateCol(test)
+    train_datecount = addDateCol(train)
+    test_datecount = addDateCol(test)
 
     # Not using codesum for this benchmark
     weather = weather.drop('CodeSum', axis=1)
@@ -99,6 +122,10 @@ def loadPreData():
     # drop columns with -1s
     train = train.ix[:,(train != -1).any(axis=0)]
     test = test.ix[:,(test != -1).any(axis=0)]
+
+    #add leaky feature
+    train['DateCount'] = train_datecount
+    test['DateCount'] = test_datecount
 
 
 
