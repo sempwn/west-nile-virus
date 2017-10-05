@@ -1,6 +1,11 @@
 import pandas as pd
 import numpy as np
 from sklearn import ensemble, preprocessing
+import os.path
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process import kernels
+from sklearn.neighbors import KernelDensity
+import datetime
 
 '''
 Random useful functions
@@ -29,6 +34,17 @@ def scoreAUC(y,probs):
 Pre-process data
 '''
 
+
+
+def convertColumnToWeeks(col):
+    return np.floor((pd.to_datetime(col) - datetime.datetime(2007,01,01)).dt.days/7.).astype(int)
+
+'''
+
+Feature engineering functions
+
+'''
+
 def addDateCol(df):
     '''
     add leaky feature to column
@@ -39,7 +55,55 @@ def addDateCol(df):
     test = pd.merge(df, dt_count, how='inner', left_on='Date', right_index=True)
     return test['DateCount']
 
-def loadPreData():
+def wnvPresentFeature(df_train,df):
+    '''
+    Take in df_train to train kde and output column
+    in df
+    returns df with new column
+    '''
+    Xs = df_train[df_train['WnvPresent']==1][['Longitude','Latitude']].get_values() #take only values where WNV present.
+    kde = KernelDensity(bandwidth=0.02,
+                        kernel='gaussian')
+    kde.fit(Xs)
+
+
+    Xs = df[['Longitude','Latitude']].get_values()
+    df['pWNV1'] = np.exp(kde.score_samples(Xs))
+
+    return df
+
+def mosquitoPresenceFeature(train,test):
+    pMos_train = np.zeros(len(train.index))
+    pMos_test = np.zeros(len(test.index))
+    for week in train['week'].unique():
+        print("Week: {}".format(week))
+        inds = train['week']==week
+        X = train[inds][['Longitude','Latitude']].get_values()
+        y = train[inds]['NumMosquitos'].get_values()
+        gpr = GaussianProcessRegressor(kernel=kernels.Matern(length_scale=0.1))
+        gpr.fit(X,y)
+
+        pMos_train[inds] = gpr.predict(X)
+
+        #now use model to predict on test data
+        inds = test['week']==week
+        X = test[inds][['Longitude','Latitude']].get_values()
+        if X.size > 0:
+            pMos_test[inds] = gpr.predict(X)
+
+    train['pMos1'] = pMos_train
+    test['pMos1'] = pMos_test
+    return train,test
+
+
+
+'''
+
+Load in data
+
+'''
+
+def loadPreData(features=False):
     """
         Beating the Benchmark
         West Nile Virus Prediction @ Kaggle
@@ -127,6 +191,53 @@ def loadPreData():
     train['DateCount'] = train_datecount
     test['DateCount'] = test_datecount
 
+    if features:
+        train,test = loadFeatures(train,test)
+
 
 
     return {'train':train,'test':test,'labels':labels}
+
+
+def generateFeatures():
+    #load in data
+    train = pd.read_csv('./data/train.csv')
+    test = pd.read_csv('./data/test.csv')
+
+    #create weeks since start of measurements column.
+    train['weeks_since_start'] = convertColumnToWeeks(train['Date'])
+    test['weeks_since_start'] = convertColumnToWeeks(test['Date'])
+    train['week'] = pd.to_datetime(train['Date']).dt.week
+    test['week'] = pd.to_datetime(test['Date']).dt.week
+
+    test =  wnvPresentFeature(train,test)
+    train = wnvPresentFeature(train,train)
+
+    train,test = mosquitoPresenceFeature(train,test)
+
+    train = train.drop(['weeks_since_start'], axis = 1)
+    test = test.drop(['weeks_since_start'], axis = 1)
+
+    train.to_csv('./data/train_features.csv')
+    test.to_csv('./data/test_features.csv')
+
+def loadFeatures(train,test):
+    feature_test_path = './data/test_features.csv'
+    feature_train_path = './data/train_features.csv'
+
+    if not (os.path.isfile(feature_test_path) and os.path.isfile(feature_train_path)):
+        print('Features not generated yet.');
+        print('Generating features. Might take some time...');
+        generateFeatures()
+
+
+    trainf = pd.read_csv('./data/train_features.csv')
+    testf = pd.read_csv('./data/test_features.csv')
+
+    test['pWNV1'] = testf['pWNV1']
+    train['pWNV1'] = trainf['pWNV1']
+
+    test['pMos1'] = testf['pMos1']
+    train['pMos1'] = trainf['pMos1']
+
+    return train,test
